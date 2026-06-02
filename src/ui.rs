@@ -1,6 +1,6 @@
 use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 
-use crate::{app::App, pond::Pond};
+use crate::app::App;
 
 impl Widget for &App {
     /// Renders the user interface widgets.
@@ -10,6 +10,6 @@ impl Widget for &App {
     // - https://docs.rs/ratatui/latest/ratatui/widgets/index.html
     // - https://github.com/ratatui/ratatui/tree/master/examples
     fn render(self, area: Rect, buf: &mut Buffer) {
-        Pond::new().render(area, buf);
+        self.pond.render(area, buf);
     }
 }

@@ -31,10 +31,8 @@ pub enum Event {
 /// You can extend this enum with your own custom events.
 #[derive(Clone, Debug)]
 pub enum AppEvent {
-    /// Increment the counter.
-    Increment,
-    /// Decrement the counter.
-    Decrement,
+    /// Droplet hits the pond at terminal-cell coordinates.
+    Droplet { x: u16, y: u16 },
     /// Quit the application.
     Quit,
 }

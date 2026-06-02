@@ -1,5 +1,8 @@
-use crate::event::{AppEvent, Event, EventHandler};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crate::{
+    event::{AppEvent, Event, EventHandler},
+    pond::Pond,
+};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 use ratatui::DefaultTerminal;
 
 /// Application.
@@ -7,8 +10,8 @@ use ratatui::DefaultTerminal;
 pub struct App {
     /// Is the application running?
     pub running: bool,
-    /// Counter.
-    pub counter: u8,
+    /// Rippling pond.
+    pub pond: Pond,
     /// Event handler.
     pub events: EventHandler,
 }
@@ -17,7 +20,7 @@ impl Default for App {
     fn default() -> Self {
         Self {
             running: true,
-            counter: 0,
+            pond: Pond::default(),
             events: EventHandler::new(),
         }
     }
@@ -36,16 +39,14 @@ impl App {
             match self.events.next().await? {
                 Event::Tick => self.tick(),
                 Event::Crossterm(event) => match event {
-                    crossterm::event::Event::Key(key_event)
-                        if key_event.kind == crossterm::event::KeyEventKind::Press =>
-                    {
-                        self.handle_key_events(key_event)?
+                    crossterm::event::Event::Key(key_event) => self.handle_key_events(key_event)?,
+                    crossterm::event::Event::Mouse(mouse_event) => {
+                        self.handle_mouse_events(mouse_event)?
                     }
                     _ => {}
                 },
                 Event::App(app_event) => match app_event {
-                    AppEvent::Increment => self.increment_counter(),
-                    AppEvent::Decrement => self.decrement_counter(),
+                    AppEvent::Droplet { x, y } => self.pond.droplet(x, y),
                     AppEvent::Quit => self.quit(),
                 },
             }
@@ -54,17 +55,30 @@ impl App {
     }
 
     /// Handles the key events and updates the state of [`App`].
-    pub fn handle_key_events(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
+    fn handle_key_events(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
+        if key_event.kind != KeyEventKind::Press {
+            return Ok(());
+        }
+
         match key_event.code {
             KeyCode::Esc | KeyCode::Char('q') => self.events.send(AppEvent::Quit),
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(AppEvent::Quit)
             }
-            KeyCode::Right => self.events.send(AppEvent::Increment),
-            KeyCode::Left => self.events.send(AppEvent::Decrement),
             // Other handlers you could add here.
             _ => {}
         }
+        Ok(())
+    }
+
+    fn handle_mouse_events(&mut self, mouse_event: MouseEvent) -> color_eyre::Result<()> {
+        if matches!(mouse_event.kind, MouseEventKind::Down(_)) {
+            self.events.send(AppEvent::Droplet {
+                x: mouse_event.column,
+                y: mouse_event.row,
+            });
+        }
+        // TODO: Other kinds of splashes for Drag event.
         Ok(())
     }
 
@@ -77,13 +91,5 @@ impl App {
     /// Set running to false to quit the application.
     pub fn quit(&mut self) {
         self.running = false;
-    }
-
-    pub fn increment_counter(&mut self) {
-        self.counter = self.counter.saturating_add(1);
-    }
-
-    pub fn decrement_counter(&mut self) {
-        self.counter = self.counter.saturating_sub(1);
     }
 }
