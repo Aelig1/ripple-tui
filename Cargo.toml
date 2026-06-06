@@ -1,6 +1,6 @@
 [package]
 name = "ripple-tui"
-version = "0.1.0"
+version = "1.0.0"
 description = "Rippling terminal"
 authors = ["Aelig1 <16878126+Aelig1@users.noreply.github.com>"]
 license = "MIT"
