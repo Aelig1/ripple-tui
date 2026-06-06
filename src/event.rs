@@ -72,6 +72,12 @@ impl EventHandler {
     }
 }
 
+impl Default for EventHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// A thread that handles reading crossterm events.
 struct EventTask {
     /// Event sender channel.
