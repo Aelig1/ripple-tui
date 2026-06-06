@@ -63,37 +63,11 @@ impl Pond {
             return;
         }
 
-        let w = self.width;
-        let h = self.height;
-
         for y in 0..self.height {
             for x in 0..self.width {
                 let i = self.index(x, y);
-
-                // Use four-neighbor von Neumann stencil for wave propagation.
-                let left = if x > 0 {
-                    self.current_buffer[i - 1]
-                } else {
-                    0.0
-                };
-                let right = if x + 1 < w {
-                    self.current_buffer[i + 1]
-                } else {
-                    0.0
-                };
-                let up = if y > 0 {
-                    self.current_buffer[i - w]
-                } else {
-                    0.0
-                };
-                let down = if y + 1 < h {
-                    self.current_buffer[i + w]
-                } else {
-                    0.0
-                };
-                let next_value = (left + right + up + down) * 0.5 - self.previous_buffer[i];
-
-                self.previous_buffer[i] = next_value * self.damping;
+                // Write new value to back buffer
+                self.previous_buffer[i] = self.next_value(x, y);
             }
         }
 
@@ -107,16 +81,35 @@ impl Pond {
     }
 
     /// Returns the current wave value at coordinates, or `0.0` outside the simulated area.
-    fn get_value(&self, x: u16, y: u16) -> f64 {
-        let x = x as usize;
-        let y = y as usize;
-
+    fn value(&self, x: usize, y: usize) -> f64 {
         if x >= self.width || y >= self.height {
             return 0.0;
         }
 
         let i = self.index(x, y);
         self.current_buffer[i]
+    }
+
+    /// Returns the previous wave value at coordinates, or `0.0` outside the simulated area.
+    fn previous_value(&self, x: usize, y: usize) -> f64 {
+        if x >= self.width || y >= self.height {
+            return 0.0;
+        }
+
+        let i = self.index(x, y);
+        self.previous_buffer[i]
+    }
+
+    /// Calculates the next wave value for the next frame at the given coordinates.
+    fn next_value(&self, x: usize, y: usize) -> f64 {
+        // Use four-neighbor von Neumann stencil for wave propagation.
+        let n = y.checked_sub(1).map_or(0.0, |y| self.value(x, y));
+        let w = x.checked_sub(1).map_or(0.0, |x| self.value(x, y));
+        let s = y.checked_add(1).map_or(0.0, |y| self.value(x, y));
+        let e = x.checked_add(1).map_or(0.0, |x| self.value(x, y));
+
+        let next_value = (n + w + s + e) * 0.5 - self.previous_value(x, y);
+        next_value * self.damping
     }
 }
 
@@ -137,7 +130,7 @@ impl Widget for &Pond {
     fn render(self, area: Rect, buf: &mut Buffer) {
         for y in 0..area.height {
             for x in 0..area.width {
-                let value = self.get_value(x, y);
+                let value = self.value(x as usize, y as usize);
                 let glyph = shade(value);
                 buf[(area.x + x, area.y + y)].set_char(glyph);
             }
