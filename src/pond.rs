@@ -15,8 +15,8 @@ pub struct Pond {
     pub damping: f64,
 
     // The size of the simulated area.
-    width: u16,
-    height: u16,
+    width: usize,
+    height: usize,
 
     // Wave states for the current and previous simulation ticks.
     current_buffer: Vec<f64>,
@@ -30,6 +30,9 @@ impl Pond {
 
     /// Resizes the simulated area, clearing existing ripples if its size changes.
     pub fn resize(&mut self, width: u16, height: u16) {
+        let width = width as usize;
+        let height = height as usize;
+
         if width == self.width && height == self.height {
             return;
         }
@@ -37,13 +40,17 @@ impl Pond {
         self.width = width;
         self.height = height;
 
-        let len = width as usize * height as usize;
+        // Allocate extra padding to each edge.
+        let len = width * height;
         self.current_buffer = vec![0.0; len];
         self.previous_buffer = vec![0.0; len];
     }
 
     /// Drops a droplet at the given terminal-cell coordinates to start a ripple.
     pub fn droplet(&mut self, x: u16, y: u16) {
+        let x = x as usize;
+        let y = y as usize;
+
         if x < self.width && y < self.height {
             let index = self.index(x, y);
             self.current_buffer[index] = -1.0;
@@ -52,23 +59,39 @@ impl Pond {
 
     /// Advances the ripple simulation by one frame.
     pub fn tick(&mut self) {
-        if self.width < 3 || self.height < 3 {
+        if self.width == 0 || self.height == 0 {
             return;
         }
 
-        let w = self.width as usize;
+        let w = self.width;
+        let h = self.height;
 
-        for y in 1..self.height - 1 {
-            for x in 1..self.width - 1 {
+        for y in 0..self.height {
+            for x in 0..self.width {
                 let i = self.index(x, y);
 
                 // Use four-neighbor von Neumann stencil for wave propagation.
-                let next_value = (self.current_buffer[i - 1]
-                    + self.current_buffer[i + 1]
-                    + self.current_buffer[i - w]
-                    + self.current_buffer[i + w])
-                    * 0.5
-                    - self.previous_buffer[i];
+                let left = if x > 0 {
+                    self.current_buffer[i - 1]
+                } else {
+                    0.0
+                };
+                let right = if x + 1 < w {
+                    self.current_buffer[i + 1]
+                } else {
+                    0.0
+                };
+                let up = if y > 0 {
+                    self.current_buffer[i - w]
+                } else {
+                    0.0
+                };
+                let down = if y + 1 < h {
+                    self.current_buffer[i + w]
+                } else {
+                    0.0
+                };
+                let next_value = (left + right + up + down) * 0.5 - self.previous_buffer[i];
 
                 self.previous_buffer[i] = next_value * self.damping;
             }
@@ -79,12 +102,15 @@ impl Pond {
     }
 
     /// Returns the buffer index for the given coordinates.
-    fn index(&self, x: u16, y: u16) -> usize {
-        y as usize * self.width as usize + x as usize
+    fn index(&self, x: usize, y: usize) -> usize {
+        y * self.width + x
     }
 
     /// Returns the current wave value at coordinates, or `0.0` outside the simulated area.
     fn get_value(&self, x: u16, y: u16) -> f64 {
+        let x = x as usize;
+        let y = y as usize;
+
         if x >= self.width || y >= self.height {
             return 0.0;
         }
