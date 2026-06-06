@@ -37,13 +37,29 @@ impl Pond {
             return;
         }
 
+        let len = width * height;
+        let mut new_current_buffer = vec![0.0; len];
+        let mut new_previous_buffer = vec![0.0; len];
+
+        let copy_width = self.width.min(width);
+        let copy_height = self.height.min(height);
+
+        for y in 0..copy_height {
+            let old_start = y * self.width;
+            let new_start = y * width;
+            let old_end = old_start + copy_width;
+            let new_end = new_start + copy_width;
+
+            new_current_buffer[new_start..new_end]
+                .copy_from_slice(&self.current_buffer[old_start..old_end]);
+            new_previous_buffer[new_start..new_end]
+                .copy_from_slice(&self.previous_buffer[old_start..old_end]);
+        }
+
         self.width = width;
         self.height = height;
-
-        // Allocate extra padding to each edge.
-        let len = width * height;
-        self.current_buffer = vec![0.0; len];
-        self.previous_buffer = vec![0.0; len];
+        self.current_buffer = new_current_buffer;
+        self.previous_buffer = new_previous_buffer;
     }
 
     /// Drops a droplet at the given terminal-cell coordinates to start a ripple.
