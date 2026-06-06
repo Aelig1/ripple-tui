@@ -34,6 +34,9 @@ impl App {
 
     /// Run the application's main loop.
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
+        let size = terminal.size()?;
+        self.pond.resize(size.width, size.height);
+
         while self.running {
             terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
             match self.events.next().await? {
@@ -86,7 +89,9 @@ impl App {
     ///
     /// The tick event is where you can update the state of your application with any logic that
     /// needs to be updated at a fixed frame rate. E.g. polling a server, updating an animation.
-    pub fn tick(&self) {}
+    pub fn tick(&mut self) {
+        self.pond.tick();
+    }
 
     /// Set running to false to quit the application.
     pub fn quit(&mut self) {
