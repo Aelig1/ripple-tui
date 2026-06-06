@@ -4,6 +4,11 @@ use crate::{
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 use ratatui::DefaultTerminal;
+use std::time::Duration;
+use tokio::time::MissedTickBehavior;
+
+/// The frequency at which the application state is updated.
+const TICK_FPS: f64 = 30.0;
 
 /// Application.
 #[derive(Debug)]
@@ -37,24 +42,33 @@ impl App {
         let size = terminal.size()?;
         self.pond.resize(size.width, size.height);
 
+        let tick_rate = Duration::from_secs_f64(1.0 / TICK_FPS);
+        let mut tick = tokio::time::interval(tick_rate);
+        tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
         while self.running {
             terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
-            match self.events.next().await? {
-                Event::Tick => self.tick(),
-                Event::Crossterm(event) => match event {
-                    crossterm::event::Event::Key(key_event) => self.handle_key_events(key_event)?,
-                    crossterm::event::Event::Mouse(mouse_event) => {
-                        self.handle_mouse_events(mouse_event)?
-                    }
-                    crossterm::event::Event::Resize(width, height) => {
-                        self.pond.resize(width, height);
-                    }
-                    _ => {}
-                },
-                Event::App(app_event) => match app_event {
-                    AppEvent::Droplet { x, y } => self.pond.droplet(x, y),
-                    AppEvent::Quit => self.quit(),
-                },
+
+            tokio::select! {
+                _ = tick.tick() => self.tick(),
+                event = self.events.next() => match event? {
+                    Event::Crossterm(event) => match event {
+                        crossterm::event::Event::Key(key_event) => {
+                            self.handle_key_events(key_event)?
+                        }
+                        crossterm::event::Event::Mouse(mouse_event) => {
+                            self.handle_mouse_events(mouse_event)?
+                        }
+                        crossterm::event::Event::Resize(width, height) => {
+                            self.pond.resize(width, height);
+                        }
+                        _ => {}
+                    },
+                    Event::App(app_event) => match app_event {
+                        AppEvent::Droplet { x, y } => self.pond.droplet(x, y),
+                        AppEvent::Quit => self.quit(),
+                    },
+                }
             }
         }
         Ok(())
@@ -88,7 +102,7 @@ impl App {
         Ok(())
     }
 
-    /// Handles the tick event of the terminal.
+    /// Updates the application state for one tick.
     ///
     /// The tick event is where you can update the state of your application with any logic that
     /// needs to be updated at a fixed frame rate. E.g. polling a server, updating an animation.

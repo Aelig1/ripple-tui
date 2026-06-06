@@ -1,21 +1,11 @@
 use color_eyre::eyre::OptionExt;
 use crossterm::event::Event as CrosstermEvent;
-use futures::{FutureExt, StreamExt};
-use std::time::Duration;
+use futures::StreamExt;
 use tokio::sync::mpsc;
-
-/// The frequency at which tick events are emitted.
-const TICK_FPS: f64 = 30.0;
 
 /// Representation of all possible events.
 #[derive(Clone, Debug)]
 pub enum Event {
-    /// An event that is emitted on a regular schedule.
-    ///
-    /// Use this event to run any code which has to run outside of being a direct response to a user
-    /// event. e.g. polling exernal systems, updating animations, or rendering the UI based on a
-    /// fixed frame rate.
-    Tick,
     /// Crossterm events.
     ///
     /// These events are emitted by the terminal.
@@ -82,7 +72,7 @@ impl EventHandler {
     }
 }
 
-/// A thread that handles reading crossterm events and emitting tick events on a regular schedule.
+/// A thread that handles reading crossterm events.
 struct EventTask {
     /// Event sender channel.
     sender: mpsc::UnboundedSender<Event>,
@@ -95,23 +85,15 @@ impl EventTask {
     }
 
     /// Runs the event thread.
-    ///
-    /// This function emits tick events at a fixed rate and polls for crossterm events in between.
     async fn run(self) -> color_eyre::Result<()> {
-        let tick_rate = Duration::from_secs_f64(1.0 / TICK_FPS);
         let mut reader = crossterm::event::EventStream::new();
-        let mut tick = tokio::time::interval(tick_rate);
+
         loop {
-            let tick_delay = tick.tick();
-            let crossterm_event = reader.next().fuse();
             tokio::select! {
               _ = self.sender.closed() => {
                 break;
               }
-              _ = tick_delay => {
-                self.send(Event::Tick);
-              }
-              Some(Ok(evt)) = crossterm_event => {
+              Some(Ok(evt)) = reader.next() => {
                 self.send(Event::Crossterm(evt));
               }
             };
