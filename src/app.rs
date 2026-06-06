@@ -46,6 +46,9 @@ impl App {
                     crossterm::event::Event::Mouse(mouse_event) => {
                         self.handle_mouse_events(mouse_event)?
                     }
+                    crossterm::event::Event::Resize(width, height) => {
+                        self.pond.resize(width, height);
+                    }
                     _ => {}
                 },
                 Event::App(app_event) => match app_event {
