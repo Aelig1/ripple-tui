@@ -1,16 +1,13 @@
 use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 
-use crate::stencil::Stencil;
+use crate::stencil::{Stencil, Tap};
 
 /// A rippling body of water.
 #[derive(Debug)]
 pub struct Pond {
-    /// The aspect ratio of a terminal character/cell. Height divided by width.
-    ///
-    /// Defaults to `2.0`.
-    pub cell_aspect: f64,
-
-    pub stencil: Stencil,
+    cell_aspect: f64,
+    stencil: Stencil,
+    taps: Vec<Tap>,
 
     /// How quickly ripples fade. Expected to be between `0.0` and `1.0`.
     ///
@@ -30,6 +27,72 @@ pub struct Pond {
 impl Pond {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Returns the aspect ratio of a terminal character/cell. Height divided by width.
+    ///
+    /// Defaults to `2.0`.
+    pub fn cell_aspect(&self) -> f64 {
+        self.cell_aspect
+    }
+
+    /// Sets the aspect ratio of a terminal cell and updates the stencil weights.
+    ///
+    /// `cell_aspect` must be finite and greater than `0.0`.
+    pub fn set_cell_aspect(&mut self, cell_aspect: f64) {
+        assert!(
+            cell_aspect.is_finite() && cell_aspect > 0.0,
+            "cell aspect must be finite and greater than zero"
+        );
+
+        if cell_aspect == self.cell_aspect {
+            return;
+        }
+
+        self.cell_aspect = cell_aspect;
+        self.update_weights();
+    }
+
+    /// Returns the stencil used for wave propagation.
+    pub fn stencil(&self) -> Stencil {
+        self.stencil
+    }
+
+    /// Sets the stencil used for wave propagation and updates the weights.
+    pub fn set_stencil(&mut self, stencil: Stencil) {
+        if stencil == self.stencil {
+            return;
+        }
+
+        self.stencil = stencil;
+        self.update_weights();
+    }
+
+    fn update_weights(&mut self) {
+        self.taps = Self::adjusted_taps(self.stencil, self.cell_aspect);
+    }
+
+    fn adjusted_taps(stencil: Stencil, cell_aspect: f64) -> Vec<Tap> {
+        let mut taps = stencil.taps().to_vec();
+
+        for tap in &mut taps {
+            let dx = tap.dx as f64;
+            let dy = tap.dy as f64;
+
+            let grid_distance_squared = dx * dx + dy * dy;
+            let physical_distance_squared = dx * dx + dy * dy * cell_aspect.powi(2);
+
+            tap.weight *= grid_distance_squared / physical_distance_squared;
+        }
+
+        let total_weight: f64 = taps.iter().map(|tap| tap.weight).sum();
+        let normalization = 2.0 / total_weight;
+
+        for tap in &mut taps {
+            tap.weight *= normalization;
+        }
+
+        taps
     }
 
     /// Resizes the simulated area, clearing existing ripples if its size changes.
@@ -124,7 +187,7 @@ impl Pond {
     fn next_value(&self, x: usize, y: usize) -> f64 {
         let mut next_value = 0.0;
 
-        for tap in self.stencil.taps() {
+        for tap in &self.taps {
             let x = x.checked_add_signed(tap.dx);
             let y = y.checked_add_signed(tap.dy);
 
@@ -139,9 +202,14 @@ impl Pond {
 
 impl Default for Pond {
     fn default() -> Self {
+        let cell_aspect = 2.0;
+        let stencil = Stencil::default();
+        let taps = Self::adjusted_taps(stencil, cell_aspect);
+
         Self {
-            cell_aspect: 2.0,
-            stencil: Stencil::default(),
+            cell_aspect,
+            stencil,
+            taps,
             damping: 0.98,
             width: 0,
             height: 0,
@@ -173,4 +241,29 @@ fn shade(value: f64) -> char {
 
     let level = (value + (RAMP.len() as f64 / 2.0)).floor() as usize;
     RAMP[level.clamp(0, RAMP.len() - 1)]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-12,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn adjusts_von_neumann_taps_for_cell_aspect() {
+        let taps = Pond::adjusted_taps(Stencil::VonNeumann, 2.0);
+
+        for tap in &taps {
+            let expected = if tap.dy == 0 { 0.8 } else { 0.2 };
+            assert_close(tap.weight, expected);
+        }
+
+        let total: f64 = taps.iter().map(|tap| tap.weight).sum();
+        assert_close(total, 2.0);
+    }
 }

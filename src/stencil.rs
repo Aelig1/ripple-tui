@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Stencil {
     /// Uses the four orthogonal neighbors equally.
     VonNeumann,
@@ -19,6 +19,7 @@ impl Stencil {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Tap {
     pub dx: isize,
     pub dy: isize,
