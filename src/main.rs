@@ -9,6 +9,7 @@ use crate::app::App;
 pub mod app;
 pub mod event;
 pub mod pond;
+pub mod stencil;
 pub mod ui;
 
 fn init() -> ratatui::DefaultTerminal {

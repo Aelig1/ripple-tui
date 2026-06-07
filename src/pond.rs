@@ -1,5 +1,7 @@
 use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 
+use crate::stencil::Stencil;
+
 /// A rippling body of water.
 #[derive(Debug)]
 pub struct Pond {
@@ -7,6 +9,8 @@ pub struct Pond {
     ///
     /// Defaults to `2.0`.
     pub cell_aspect: f64,
+
+    pub stencil: Stencil,
 
     /// How quickly ripples fade. Expected to be between `0.0` and `1.0`.
     ///
@@ -118,14 +122,18 @@ impl Pond {
 
     /// Calculates the next wave value for the next frame at the given coordinates.
     fn next_value(&self, x: usize, y: usize) -> f64 {
-        // Use four-neighbor von Neumann stencil for wave propagation.
-        let n = y.checked_sub(1).map_or(0.0, |y| self.value(x, y));
-        let w = x.checked_sub(1).map_or(0.0, |x| self.value(x, y));
-        let s = y.checked_add(1).map_or(0.0, |y| self.value(x, y));
-        let e = x.checked_add(1).map_or(0.0, |x| self.value(x, y));
+        let mut next_value = 0.0;
 
-        let next_value = (n + w + s + e) * 0.5 - self.previous_value(x, y);
-        next_value * self.damping
+        for tap in self.stencil.taps() {
+            let x = x.checked_add_signed(tap.dx);
+            let y = y.checked_add_signed(tap.dy);
+
+            if let (Some(x), Some(y)) = (x, y) {
+                next_value += self.value(x, y) * tap.weight;
+            }
+        }
+
+        (next_value - self.previous_value(x, y)) * self.damping
     }
 }
 
@@ -133,6 +141,7 @@ impl Default for Pond {
     fn default() -> Self {
         Self {
             cell_aspect: 2.0,
+            stencil: Stencil::default(),
             damping: 0.98,
             width: 0,
             height: 0,
